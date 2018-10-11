@@ -10,7 +10,7 @@ public class CloudFoundryProps {
     private String clientId;
     private String clientSecret;
     private boolean skipSslValidation;
-    private Firehose firehose = new Firehose();
+    private Firehose firehose;
 
     public String getApiHost() {
         return apiHost;
@@ -52,7 +52,7 @@ public class CloudFoundryProps {
         this.firehose = firehose;
     }
 
-    class Firehose {
+    public static class Firehose {
         private String subscriptionId;
 
         public String getSubscriptionId() {
