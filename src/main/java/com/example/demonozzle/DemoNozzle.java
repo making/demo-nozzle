@@ -29,6 +29,9 @@ public class DemoNozzle implements ApplicationRunner {
         Flux<Envelope> firehose = this.dopplerClient.firehose(request)
                 .doOnNext(envelope -> {
                     log.info("{}", envelope);
+                })
+                .doOnError(e -> {
+                    log.error("firehose error", e);
                 });
         firehose.subscribe();
     }
