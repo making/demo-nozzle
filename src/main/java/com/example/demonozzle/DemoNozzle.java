@@ -1,7 +1,6 @@
 package com.example.demonozzle;
 
 import org.cloudfoundry.doppler.DopplerClient;
-import org.cloudfoundry.doppler.Envelope;
 import org.cloudfoundry.doppler.FirehoseRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,27 +9,29 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
+import reactor.rabbitmq.Sender;
 import reactor.retry.Backoff;
 import reactor.retry.Repeat;
 import reactor.retry.Retry;
 
 import javax.annotation.PreDestroy;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Component
 public class DemoNozzle implements ApplicationRunner {
     private final DopplerClient dopplerClient;
     private final CloudFoundryProps props;
+    private final Sender rabbitMqSender;
     private static final Logger log = LoggerFactory.getLogger(DemoNozzle.class);
     private Disposable disposable;
 
-    public DemoNozzle(DopplerClient dopplerClient, CloudFoundryProps props) {
+    public DemoNozzle(DopplerClient dopplerClient, CloudFoundryProps props, Sender rabbitMqSender) {
         this.dopplerClient = dopplerClient;
         this.props = props;
+        this.rabbitMqSender = rabbitMqSender;
     }
 
     @Override
@@ -50,12 +51,12 @@ public class DemoNozzle implements ApplicationRunner {
                 .backoff(Backoff.fixed(Duration.ofSeconds(1)))
                 .timeout(Duration.ofMinutes(10));
 
-        Flux<Envelope> firehose = this.dopplerClient.firehose(request)
-                .doOnNext(envelope -> {
+        Flux<String> firehose = this.dopplerClient.firehose(request)
+                .flatMap(envelope -> {
                     completed.set(false);
-                    Instant instant = Instant.ofEpochMilli(envelope.getTimestamp() / 1_000_000);
-                    log.info("{}\t:\t{}", LocalDateTime.ofInstant(instant, ZoneId.systemDefault()), envelope);
+                    return this.rabbitMqSender.sendWithPublishConfirms(Mono.just(new OutboundMessage("demo", "#", envelope.toString().getBytes())));
                 })
+                .map(r -> new String(r.getOutboundMessage().getBody()) + " => " + r.isAck())
                 .doOnRequest(x -> log.info("doOnRequest({})", x))
                 .doOnTerminate(() -> log.info("doOnTerminate()"))
                 .doOnCancel(() -> log.info("doOnCancel()"))
