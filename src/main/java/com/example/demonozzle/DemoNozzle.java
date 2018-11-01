@@ -52,6 +52,7 @@ public class DemoNozzle implements ApplicationRunner {
 
         Flux<Envelope> firehose = this.dopplerClient.firehose(request)
                 .doOnNext(envelope -> {
+                    completed.set(false);
                     Instant instant = Instant.ofEpochMilli(envelope.getTimestamp() / 1_000_000);
                     log.info("{}\t:\t{}", LocalDateTime.ofInstant(instant, ZoneId.systemDefault()), envelope);
                 })
